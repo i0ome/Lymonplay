@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:agora_rtc_engine/agora_rtc_engine.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:zego_uikit_prebuilt_live_audio_room/zego_uikit_prebuilt_live_audio_room.dart';
 
 // =============================================================
-//  الإعدادات الثابتة والبيانات الخاصة بالبرنامج
+//  الإعدادات الثابتة والبيانات الخاصة بالبرنامج (ZegoCloud)
 // =============================================================
-
-const String agoraAppId = "9117c14488754e2aa06fc5ed56e32e5c";
+const int zegoAppID = 123456789; // استبدلها برقم AppID الخاص بك من ZegoCloud
+const String zegoAppSign = "YOUR_ZEGOCLOUD_APP_SIGN_HERE"; // استبدلها بـ AppSign الخاص بك
 
 const String adminEmail = "mmaymanmm2020@gmail.com";
 const String adminPassword = "Mmaymanmm2020";
@@ -211,13 +210,12 @@ class MainDashboardScreen extends StatefulWidget {
 class _MainDashboardScreenState extends State<MainDashboardScreen> {
   late int coins;
   int karma = 0;
-  bool hasPermanentRoom = false; // هل يمتلك روم دائم للأبد؟
+  bool hasPermanentRoom = false;
   final _tempRoomController = TextEditingController(text: "Temp_Room_1");
 
   @override
   void initState() {
     super.initState();
-    // الأدمن يبدأ برصيد ضخم وروم دائم مفعل تلقائياً، العضو يبدأ بـ 10000 عملة
     coins = widget.isVerifiedAdmin ? 9999999 : 10000;
     hasPermanentRoom = widget.isVerifiedAdmin;
   }
@@ -225,7 +223,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
   int get starsCount => (karma / 1000).floor();
   int get userLevel => 1 + (karma / 200).floor();
 
-  // شراء الروم الدائم للأبد (بـ 6666 عملة لمرة واحدة)
   void _buyPermanentRoom() {
     const int permanentRoomCost = 6666;
     if (coins < permanentRoomCost && !widget.isVerifiedAdmin) {
@@ -250,16 +247,12 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     );
   }
 
-  // دخول الروم الدائم الخاص بالمستخدم
-  void _openPermanentRoom() async {
-    await Permission.microphone.request();
-    if (!mounted) return;
-
+  void _openPermanentRoom() {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => AudioRoomScreen(
-          roomChannelId: "Permanent_${widget.userName}",
+          roomID: "Permanent_${widget.userName}",
           roomTitle: "روم ${widget.userName} الدائم 👑",
           userName: widget.userName,
           isVerifiedAdmin: widget.isVerifiedAdmin,
@@ -276,19 +269,15 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     );
   }
 
-  // فتح روم مؤقت مجاني (يختفي بمجرد الخروج منه)
-  void _openTemporaryRoom() async {
+  void _openTemporaryRoom() {
     final roomName = _tempRoomController.text.trim();
     if (roomName.isEmpty) return;
-
-    await Permission.microphone.request();
-    if (!mounted) return;
 
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => AudioRoomScreen(
-          roomChannelId: roomName,
+          roomID: roomName,
           roomTitle: "روم مؤقت: $roomName",
           userName: widget.userName,
           isVerifiedAdmin: widget.isVerifiedAdmin,
@@ -401,8 +390,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
               ),
             ),
             const SizedBox(height: 20),
-
-            // قسم الروم الدائم
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -416,9 +403,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                   const Text("👑 روم الملكية الدائم للأبد", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.amber)),
                   const SizedBox(height: 8),
                   Text(
-                    hasPermanentRoom
-                        ? "لديك روم دائم خاص بك ومحفوظ في حسابك للأبد."
-                        : "امتلك روم دائم للأبد في حسابك بـ 6666 عملة فقط.",
+                    hasPermanentRoom ? "لديك روم دائم خاص بك ومحفوظ في حسابك للأبد." : "امتلك روم دائم للأبد في حسابك بـ 6666 عملة فقط.",
                     style: TextStyle(color: Colors.grey[400], fontSize: 12),
                   ),
                   const SizedBox(height: 12),
@@ -438,10 +423,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                 ],
               ),
             ),
-
             const SizedBox(height: 20),
-
-            // قسم الروم المؤقت المجاني
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -480,10 +462,10 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
 }
 
 // =============================================================
-//  3. شاشة الروم الصوتية والمقاعد والهدايا وتوزيع العملات للأدمن
+//  3. شاشة الروم الصوتية عبر ZegoCloud
 // =============================================================
 class AudioRoomScreen extends StatefulWidget {
-  final String roomChannelId;
+  final String roomID;
   final String roomTitle;
   final String userName;
   final bool isVerifiedAdmin;
@@ -493,7 +475,7 @@ class AudioRoomScreen extends StatefulWidget {
 
   const AudioRoomScreen({
     super.key,
-    required this.roomChannelId,
+    required this.roomID,
     required this.roomTitle,
     required this.userName,
     required this.isVerifiedAdmin,
@@ -507,54 +489,14 @@ class AudioRoomScreen extends StatefulWidget {
 }
 
 class _AudioRoomScreenState extends State<AudioRoomScreen> {
-  RtcEngine? _engine;
-  bool _isMuted = false;
-
   late int myCoins;
   late int myKarma;
-
-  final List<String?> _seatUsers = List.generate(8, (index) => null);
 
   @override
   void initState() {
     super.initState();
     myCoins = widget.currentCoins;
     myKarma = widget.currentKarma;
-    _initAgoraAudioEngine();
-  }
-
-  Future<void> _initAgoraAudioEngine() async {
-    _engine = createAgoraRtcEngine();
-    await _engine!.initialize(const RtcEngineContext(
-      appId: agoraAppId,
-      channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
-    ));
-
-    _engine!.registerEventHandler(
-      RtcEngineEventHandler(
-        onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
-          setState(() {
-            _seatUsers[0] = widget.userName;
-          });
-        },
-      ),
-    );
-
-    await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
-    await _engine!.enableAudio();
-    await _engine!.joinChannel(
-      token: "",
-      channelId: widget.roomChannelId,
-      uid: 0,
-      options: const ChannelMediaOptions(),
-    );
-  }
-
-  @override
-  void dispose() {
-    _engine?.leaveChannel();
-    _engine?.release();
-    super.dispose();
   }
 
   void _sendGift(GiftItem gift) {
@@ -696,6 +638,9 @@ class _AudioRoomScreenState extends State<AudioRoomScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // تمييز اسم الأدمن بالصح الأصفر تلقائياً داخل الروم
+    final String displayName = widget.isVerifiedAdmin ? "${widget.userName} 🟡" : widget.userName;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.roomTitle),
@@ -705,69 +650,21 @@ class _AudioRoomScreenState extends State<AudioRoomScreen> {
               icon: const Icon(Icons.add_moderator, color: Colors.amber),
               onPressed: _openAdminDistributePanel,
             ),
+          IconButton(
+            icon: const Icon(Icons.card_giftcard, color: Colors.amber),
+            onPressed: _openGiftsMenu,
+          ),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.all(20),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-              ),
-              itemCount: 8,
-              itemBuilder: (context, index) {
-                final userOnSeat = _seatUsers[index];
-                return Column(
-                  children: [
-                    CircleAvatar(
-                      radius: 30,
-                      backgroundColor: userOnSeat != null ? Colors.amber : Colors.grey[800],
-                      child: Icon(
-                        userOnSeat != null ? Icons.mic : Icons.add,
-                        color: Colors.black,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      userOnSeat ?? "مقعد ${index + 1}",
-                      style: const TextStyle(fontSize: 11),
-                      overflow: TextOverflow.ellipsis,
-                    )
-                  ],
-                );
-              },
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            color: const Color(0xFF1E222D),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                IconButton(
-                  icon: Icon(_isMuted ? Icons.mic_off : Icons.mic, color: _isMuted ? Colors.red : Colors.green),
-                  onPressed: () {
-                    setState(() {
-                      _isMuted = !_isMuted;
-                    });
-                    _engine?.muteLocalAudioStream(_isMuted);
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.card_giftcard, color: Colors.amber, size: 30),
-                  onPressed: _openGiftsMenu,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.call_end, color: Colors.red),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-          )
-        ],
+      body: ZegoUIKitPrebuiltLiveAudioRoom(
+        appID: zegoAppID,
+        appSign: zegoAppSign,
+        userID: widget.userName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_'),
+        userName: displayName,
+        roomID: widget.roomID,
+        config: ZegoUIKitPrebuiltLiveAudioRoomConfig.audience()
+          ..takeSeatIndexWhenJoining = 0
+          ..hostSeatIndexes = [0],
       ),
     );
   }
