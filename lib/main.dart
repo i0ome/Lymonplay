@@ -6,14 +6,11 @@ import 'package:permission_handler/permission_handler.dart';
 //  الإعدادات الثابتة والبيانات الخاصة بالبرنامج
 // =============================================================
 
-// معرف Agora App ID الخاص بمشروعك
 const String agoraAppId = "9117c14488754e2aa06fc5ed56e32e5c";
 
-// بيانات حساب الإدارة الموثق
 const String adminEmail = "mmaymanmm2020@gmail.com";
 const String adminPassword = "Mmaymanmm2020";
 
-// هيكل نموذج الهدايا
 class GiftItem {
   final String id;
   final String name;
@@ -27,11 +24,9 @@ class GiftItem {
     required this.priceInCoins,
   });
 
-  // شرط الكاريزما: كل 5 عملات تعطي 1 كاريزما
   int get karmaValue => (priceInCoins / 5).floor();
 }
 
-// قائمة متنوعة وكبيرة من الهدايا
 final List<GiftItem> allGifts = [
   GiftItem(id: '1', name: 'وردة', icon: '🌹', priceInCoins: 5),
   GiftItem(id: '2', name: 'قلب', icon: '❤️', priceInCoins: 10),
@@ -73,7 +68,7 @@ class WePlayAudioApp extends StatelessWidget {
 }
 
 // =============================================================
-//  1. شاشة تسجيل الدخول والتأكد من حساب Lymon الموثق
+//  1. شاشة تسجيل الدخول
 // =============================================================
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -102,7 +97,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
     bool isVerifiedAdmin = false;
 
-    // التحقق من حساب الادمن Lymon والرمز المخفي
     if (email.toLowerCase() == adminEmail.toLowerCase()) {
       if (password != adminPassword) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -167,7 +161,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: _passwordController,
-                  obscureText: true, // إخفاء الرمز المخفي
+                  obscureText: true,
                   decoration: const InputDecoration(
                     labelText: 'رمز الإدارة المخفي',
                     border: OutlineInputBorder(),
@@ -196,7 +190,7 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 // =============================================================
-//  2. الشاشة الرئيسية والبروفايل ونظام الكاريزما والنجوم
+//  2. الشاشة الرئيسية وإدارة الروم الدائم والمؤقت
 // =============================================================
 class MainDashboardScreen extends StatefulWidget {
   final String userName;
@@ -216,21 +210,100 @@ class MainDashboardScreen extends StatefulWidget {
 
 class _MainDashboardScreenState extends State<MainDashboardScreen> {
   late int coins;
-  int karma = 0; // الكاريزما
-  final _roomIdController = TextEditingController(text: "Room_101");
+  int karma = 0;
+  bool hasPermanentRoom = false; // هل يمتلك روم دائم للأبد؟
+  final _tempRoomController = TextEditingController(text: "Temp_Room_1");
 
   @override
   void initState() {
     super.initState();
-    // الأدمن الموثق يمتلك رصيد غير محدود من البداية
-    coins = widget.isVerifiedAdmin ? 9999999 : 100;
+    // الأدمن يبدأ برصيد ضخم وروم دائم مفعل تلقائياً، العضو يبدأ بـ 10000 عملة
+    coins = widget.isVerifiedAdmin ? 9999999 : 10000;
+    hasPermanentRoom = widget.isVerifiedAdmin;
   }
 
-  // حساب النجوم: كل 1000 كاريزما = نجمة واحدة ⭐
   int get starsCount => (karma / 1000).floor();
-
-  // حساب المستوى: يرتفع المستوى كل 200 كاريزما
   int get userLevel => 1 + (karma / 200).floor();
+
+  // شراء الروم الدائم للأبد (بـ 6666 عملة لمرة واحدة)
+  void _buyPermanentRoom() {
+    const int permanentRoomCost = 6666;
+    if (coins < permanentRoomCost && !widget.isVerifiedAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('رصيدك لا يكفي! شراء الروم الدائم يتطلب 6666 عملة')),
+      );
+      return;
+    }
+
+    setState(() {
+      if (!widget.isVerifiedAdmin) {
+        coins -= permanentRoomCost;
+      }
+      hasPermanentRoom = true;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        backgroundColor: Colors.green,
+        content: Text('🎉 مبروك! تمتلك الآن رواعاً دائماً للأبد في حسابك'),
+      ),
+    );
+  }
+
+  // دخول الروم الدائم الخاص بالمستخدم
+  void _openPermanentRoom() async {
+    await Permission.microphone.request();
+    if (!mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AudioRoomScreen(
+          roomChannelId: "Permanent_${widget.userName}",
+          roomTitle: "روم ${widget.userName} الدائم 👑",
+          userName: widget.userName,
+          isVerifiedAdmin: widget.isVerifiedAdmin,
+          currentCoins: coins,
+          currentKarma: karma,
+          onUserDataUpdated: (newCoins, newKarma) {
+            setState(() {
+              coins = newCoins;
+              karma = newKarma;
+            });
+          },
+        ),
+      ),
+    );
+  }
+
+  // فتح روم مؤقت مجاني (يختفي بمجرد الخروج منه)
+  void _openTemporaryRoom() async {
+    final roomName = _tempRoomController.text.trim();
+    if (roomName.isEmpty) return;
+
+    await Permission.microphone.request();
+    if (!mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AudioRoomScreen(
+          roomChannelId: roomName,
+          roomTitle: "روم مؤقت: $roomName",
+          userName: widget.userName,
+          isVerifiedAdmin: widget.isVerifiedAdmin,
+          currentCoins: coins,
+          currentKarma: karma,
+          onUserDataUpdated: (newCoins, newKarma) {
+            setState(() {
+              coins = newCoins;
+              karma = newKarma;
+            });
+          },
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -256,11 +329,10 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
           )
         ],
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // بطاقة بيانات بروفايل المستخدم
             Card(
               color: const Color(0xFF1E222D),
               child: Padding(
@@ -286,7 +358,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                                 Text(widget.userName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                                 if (widget.isVerifiedAdmin) ...[
                                   const SizedBox(width: 6),
-                                  // التوثيق بالصح الأصفر لحساب Lymon
                                   const Icon(Icons.check_circle, color: Colors.amber, size: 20),
                                 ]
                               ],
@@ -330,49 +401,78 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            TextField(
-              controller: _roomIdController,
-              decoration: const InputDecoration(
-                labelText: 'اسم/معرف الروم الصوتية',
-                border: OutlineInputBorder(),
+
+            // قسم الروم الدائم
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E222D),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: hasPermanentRoom ? Colors.amber : Colors.grey.shade800),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("👑 روم الملكية الدائم للأبد", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.amber)),
+                  const SizedBox(height: 8),
+                  Text(
+                    hasPermanentRoom
+                        ? "لديك روم دائم خاص بك ومحفوظ في حسابك للأبد."
+                        : "امتلك روم دائم للأبد في حسابك بـ 6666 عملة فقط.",
+                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                  ),
+                  const SizedBox(height: 12),
+                  hasPermanentRoom
+                      ? ElevatedButton.icon(
+                          icon: const Icon(Icons.star, color: Colors.black),
+                          label: const Text('دخول الروم الدائم (مجاني)', style: TextStyle(color: Colors.black)),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, minimumSize: const Size(double.infinity, 45)),
+                          onPressed: _openPermanentRoom,
+                        )
+                      : ElevatedButton.icon(
+                          icon: const Icon(Icons.shopping_cart, color: Colors.black),
+                          label: const Text('شراء روم دائم للأبد (6666 عملة)', style: TextStyle(color: Colors.black)),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, minimumSize: const Size(double.infinity, 45)),
+                          onPressed: _buyPermanentRoom,
+                        ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.meeting_room, color: Colors.black),
-              label: const Text('دخول الروم الصوتية', style: TextStyle(color: Colors.black, fontSize: 16)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.amber,
-                minimumSize: const Size(double.infinity, 50),
+
+            const SizedBox(height: 20),
+
+            // قسم الروم المؤقت المجاني
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E222D),
+                borderRadius: BorderRadius.circular(12),
               ),
-              onPressed: _joinAudioRoom,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("⏳ فتح روم مؤقت (مجاني)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.cyan)),
+                  const SizedBox(height: 8),
+                  const Text("روم مؤقت يختفي تماماً فور خروجك منه.", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _tempRoomController,
+                    decoration: const InputDecoration(
+                      labelText: 'اسم الروم المؤقت',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.meeting_room, color: Colors.black),
+                    label: const Text('دخول روم مؤقت مجاني', style: TextStyle(color: Colors.black)),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.cyanAccent, minimumSize: const Size(double.infinity, 45)),
+                    onPressed: _openTemporaryRoom,
+                  ),
+                ],
+              ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  void _joinAudioRoom() async {
-    await Permission.microphone.request();
-
-    if (!mounted) return;
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => AudioRoomScreen(
-          roomChannelId: _roomIdController.text.trim(),
-          userName: widget.userName,
-          isVerifiedAdmin: widget.isVerifiedAdmin,
-          currentCoins: coins,
-          currentKarma: karma,
-          onUserDataUpdated: (newCoins, newKarma) {
-            setState(() {
-              coins = newCoins;
-              karma = newKarma;
-            });
-          },
         ),
       ),
     );
@@ -380,10 +480,11 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
 }
 
 // =============================================================
-//  3. شاشة الروم الصوتية والمقاعد ومتجر الهدايا وتوزيع العملات
+//  3. شاشة الروم الصوتية والمقاعد والهدايا وتوزيع العملات للأدمن
 // =============================================================
 class AudioRoomScreen extends StatefulWidget {
   final String roomChannelId;
+  final String roomTitle;
   final String userName;
   final bool isVerifiedAdmin;
   final int currentCoins;
@@ -393,6 +494,7 @@ class AudioRoomScreen extends StatefulWidget {
   const AudioRoomScreen({
     super.key,
     required this.roomChannelId,
+    required this.roomTitle,
     required this.userName,
     required this.isVerifiedAdmin,
     required this.currentCoins,
@@ -432,7 +534,7 @@ class _AudioRoomScreenState extends State<AudioRoomScreen> {
       RtcEngineEventHandler(
         onJoinChannelSuccess: (RtcConnection connection, int elapsed) {
           setState(() {
-            _seatUsers[0] = widget.userName; // إجلاس المستخدم في المايك الأول
+            _seatUsers[0] = widget.userName;
           });
         },
       ),
@@ -467,7 +569,7 @@ class _AudioRoomScreenState extends State<AudioRoomScreen> {
       if (!widget.isVerifiedAdmin) {
         myCoins -= gift.priceInCoins;
       }
-      myKarma += gift.karmaValue; // إضافة الكاريزما (1 لكل 5 عملات)
+      myKarma += gift.karmaValue;
     });
 
     widget.onUserDataUpdated(myCoins, myKarma);
@@ -596,7 +698,7 @@ class _AudioRoomScreenState extends State<AudioRoomScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("روم: ${widget.roomChannelId}"),
+        title: Text(widget.roomTitle),
         actions: [
           if (widget.isVerifiedAdmin)
             IconButton(
@@ -607,7 +709,6 @@ class _AudioRoomScreenState extends State<AudioRoomScreen> {
       ),
       body: Column(
         children: [
-          // المقاعد الثمانية في الغرفة
           Expanded(
             child: GridView.builder(
               padding: const EdgeInsets.all(20),
@@ -640,8 +741,6 @@ class _AudioRoomScreenState extends State<AudioRoomScreen> {
               },
             ),
           ),
-
-          // شريط أدوات التحكم بالصوت والهدايا
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             color: const Color(0xFF1E222D),
